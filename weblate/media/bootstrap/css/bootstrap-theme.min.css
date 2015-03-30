@@ -13,8 +13,25 @@
   height: 2em !important;
 }
 
+.breadcrumb {
+  background-color: #f8f8f8;
+  border-radius: 0px;
+}
 .breadcrumb a {
   color: #666; 
+}
+
+.panel-primary {
+  border-color: #f0f0f0;
+}
+.panel-primary > .panel-heading {
+  color: #333;
+  background-color: #f0f0f0;
+  border-color: #f0f0f0;
+}
+.panel-footer {
+  background-color: #f8f8f8;
+  border-top: 1px solid #f0f0f0;
 }
 
 .table-condensed>thead>tr>th, .table-condensed>tbody>tr>th, .table-condensed>tfoot>tr>th, .table-condensed>thead>tr>td, .table-condensed>tbody>tr>td, .table-condensed>tfoot>tr>td {
