@@ -50,8 +50,15 @@ def notify_merge_failure(subproject, error, status):
     subscriptions = Profile.objects.subscribed_merge_failure(
         subproject.project,
     )
+    users = set()
     for subscription in subscriptions:
         subscription.notify_merge_failure(subproject, error, status)
+        users.add(subscription.user_id)
+
+    if subproject.project.owner and subproject.project.owner_id not in users:
+        subproject.project.owner.profile.notify_merge_failure(
+            subproject, error, status
+        )
 
     # Notify admins
     send_notification_email(
@@ -86,8 +93,15 @@ def notify_new_language(subproject, language, user):
         subproject.project,
         user
     )
+    users = set()
     for subscription in subscriptions:
         subscription.notify_new_language(subproject, language, user)
+        users.add(subscription.user_id)
+
+    if subproject.project.owner and subproject.project.owner_id not in users:
+        subproject.project.owner.profile.notify_new_language(
+            subproject, language, user
+        )
 
     # Notify admins
     send_notification_email(
@@ -357,8 +371,9 @@ class Profile(models.Model):
     )
     languages = models.ManyToManyField(
         Language,
-        verbose_name=_('Languages'),
+        verbose_name=_('Translated languages'),
         blank=True,
+        help_text=_('Choose languages to which you can translate.')
     )
     secondary_languages = models.ManyToManyField(
         Language,
@@ -368,6 +383,11 @@ class Profile(models.Model):
     )
     suggested = models.IntegerField(default=0, db_index=True)
     translated = models.IntegerField(default=0, db_index=True)
+
+    hide_completed = models.BooleanField(
+        verbose_name=_('Hide completed translations on dashboard'),
+        default=False
+    )
 
     subscriptions = models.ManyToManyField(
         'trans.Project',
@@ -625,6 +645,7 @@ def create_groups(update):
             Permission.objects.get(codename='upload_translation'),
             Permission.objects.get(codename='overwrite_translation'),
             Permission.objects.get(codename='save_translation'),
+            Permission.objects.get(codename='save_template'),
             Permission.objects.get(codename='accept_suggestion'),
             Permission.objects.get(codename='delete_suggestion'),
             Permission.objects.get(codename='vote_suggestion'),
@@ -651,6 +672,7 @@ def create_groups(update):
             Permission.objects.get(codename='push_translation'),
             Permission.objects.get(codename='automatic_translation'),
             Permission.objects.get(codename='save_translation'),
+            Permission.objects.get(codename='save_template'),
             Permission.objects.get(codename='accept_suggestion'),
             Permission.objects.get(codename='vote_suggestion'),
             Permission.objects.get(codename='override_suggestion'),

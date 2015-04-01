@@ -104,6 +104,8 @@ File mask
     ``locale/*/LC_MESSAGES/django.po``.
 Monolingual base language file
     Base file containing strings definition for :ref:`monolingual`.
+Edit base file
+    Whether to allow editing of base file for :ref:`monolingual`.
 Base file for new translations
     Base file used to generate new translations, eg. ``.pot`` file with Gettext.
 File format
@@ -120,6 +122,9 @@ Allow translation propagation
 
     It's usually good idea to disable this for monolingual translations unless
     you are using same IDs across whole project.
+Post-update script
+    One of scripts defined in :setting:`POST_UPDATE_SCRIPTS` which is executed
+    after receiving update. This can be used to update the translation files.
 Pre-commit script
     One of scripts defined in :setting:`PRE_COMMIT_SCRIPTS` which is executed
     before commit. This can be used to generate some metadata about translation

@@ -73,7 +73,7 @@ class RepoTestCase(TestCase):
         # Clone repo for testing
         if not os.path.exists(self.git_base_repo_path):
             print(
-                'Cloning test repository to {0}...'.format(
+                'Cloning Git test repository to {0}...'.format(
                     self.git_base_repo_path
                 )
             )
@@ -92,6 +92,11 @@ class RepoTestCase(TestCase):
 
         # Clone repo for testing
         if not os.path.exists(self.hg_base_repo_path):
+            print(
+                'Cloning Mercurial test repository to {0}...'.format(
+                    self.hg_base_repo_path
+                )
+            )
             HgRepository.clone(
                 HG_URL,
                 self.hg_base_repo_path,
@@ -593,7 +598,7 @@ class SubProjectTest(RepoTestCase):
         self.assertRaisesMessage(
             ValidationError,
             'Invalid link to a Weblate project, '
-            'use weblate://project/subproject.',
+            'use weblate://project/component.',
             project.full_clean
         )
 
@@ -603,7 +608,7 @@ class SubProjectTest(RepoTestCase):
         self.assertRaisesMessage(
             ValidationError,
             'Invalid link to a Weblate project, '
-            'use weblate://project/subproject.',
+            'use weblate://project/component.',
             project.full_clean
         )
 
@@ -694,7 +699,7 @@ class TranslationTest(RepoTestCase):
         subproject.pre_commit_script = get_test_file(
             '../../../../examples/hook-generate-mo'
         )
-        appsettings.SCRIPT_CHOICES.append(
+        appsettings.PRE_COMMIT_SCRIPT_CHOICES.append(
             (subproject.pre_commit_script, 'hook-generate-mo')
         )
         subproject.extra_commit_file = 'po/%(language)s.mo'

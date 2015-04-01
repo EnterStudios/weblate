@@ -9,6 +9,12 @@ Released on ? 2015.
 * Dropped support for Django 1.6 and South migrations.
 * Support for adding new translations when using Java Property files
 * Allow to accept suggestion without editing.
+* Improved support for Google OAuth2.
+* Added support for Microsoft .resx files.
+* Tuned default robots.txt to disallow big crawling of translations.
+* Simplified workflow for accepting suggestions.
+* Added project owners who always receive important notifications.
+* Allow to disable editing of monolingual template.
 
 weblate 2.2
 -----------
@@ -44,6 +50,7 @@ Released on Dec 5th 2014.
 * Improved SSH keys handling and storage.
 * Improved repository locking.
 * Customizable quality checks per source string.
+* Allow to hide completed translations from dashboard.
 
 weblate 2.0
 -----------

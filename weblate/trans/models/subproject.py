@@ -29,10 +29,13 @@ from django.utils import timezone
 from glob import glob
 import os
 import time
+import subprocess
 from weblate.trans.formats import FILE_FORMAT_CHOICES, FILE_FORMATS
 from weblate.trans.mixins import PercentMixin, URLMixin, PathMixin
 from weblate.trans.filelock import FileLock
-from weblate.trans.util import is_repo_link, get_site_url, cleanup_repo_url
+from weblate.trans.util import (
+    is_repo_link, get_site_url, cleanup_repo_url, get_clean_env,
+)
 from weblate.trans.vcs import RepositoryException, VCS_REGISTRY, VCS_CHOICES
 from weblate.trans.models.translation import Translation
 from weblate.trans.validators import (
@@ -41,7 +44,10 @@ from weblate.trans.validators import (
     validate_check_flags, validate_commit_message,
 )
 from weblate.lang.models import Language
-from weblate.appsettings import SCRIPT_CHOICES, HIDE_REPO_CREDENTIALS
+from weblate.appsettings import (
+    PRE_COMMIT_SCRIPT_CHOICES, POST_UPDATE_SCRIPT_CHOICES,
+    HIDE_REPO_CREDENTIALS,
+)
 from weblate.accounts.models import notify_merge_failure
 from weblate.trans.models.changes import Change
 
@@ -170,6 +176,14 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             'for monolingual translation formats.'
         )
     )
+    edit_template = models.BooleanField(
+        verbose_name=ugettext_lazy('Edit base file'),
+        default=True,
+        help_text=ugettext_lazy(
+            'Whether users will be able to edit base file '
+            'for monolingual translations.'
+        )
+    )
     new_base = models.CharField(
         verbose_name=ugettext_lazy('Base file for new translations'),
         max_length=200,
@@ -200,12 +214,23 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             'documentation for more details.',
         )
     )
+    post_update_script = models.CharField(
+        verbose_name=ugettext_lazy('Post-update script'),
+        max_length=200,
+        default='',
+        blank=True,
+        choices=POST_UPDATE_SCRIPT_CHOICES,
+        help_text=ugettext_lazy(
+            'Script to be executed after receiving a repository update, '
+            'please check documentation for more details.'
+        ),
+    )
     pre_commit_script = models.CharField(
         verbose_name=ugettext_lazy('Pre-commit script'),
         max_length=200,
         default='',
         blank=True,
-        choices=SCRIPT_CHOICES,
+        choices=PRE_COMMIT_SCRIPT_CHOICES,
         help_text=ugettext_lazy(
             'Script to be executed before committing translation, '
             'please check documentation for more details.'
@@ -626,6 +651,9 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         # update remote branch
         ret = self.update_branch(request, method=method)
 
+        # run post update hook
+        self.run_hook(self.post_update_script)
+
         # create translation objects for all files
         self.create_translations(request=request)
 
@@ -817,11 +845,14 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         prefix = os.path.join(self.get_path(), '')
         matches = glob(os.path.join(self.get_path(), self.filemask))
-        matches = [f.replace(prefix, '') for f in matches]
+        matches = set([f.replace(prefix, '') for f in matches])
         # We want to list template among translations as well
-        if self.has_template() and self.template not in matches:
-            matches.append(self.template)
-        return matches
+        if self.has_template():
+            if self.edit_template:
+                matches.add(self.template)
+            else:
+                matches.discard(self.template)
+        return sorted(matches)
 
     def create_translations(self, force=False, langs=None, request=None):
         '''
@@ -929,7 +960,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             raise ValidationError(
                 _(
                     'Invalid link to a Weblate project, '
-                    'use weblate://project/subproject.'
+                    'use weblate://project/component.'
                 )
             )
         if self.push != '':
@@ -1169,6 +1200,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             )
             changed_setup = (
                 (old.file_format != self.file_format) or
+                (old.edit_template != self.edit_template) or
                 (old.template != self.template)
             )
             # Detect slug changes and rename git repo
@@ -1364,3 +1396,29 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                 user=user,
                 action=Change.ACTION_UNLOCK,
             )
+
+    def run_pre_commit_script(self, filename):
+        """
+        Pre commit hook
+        """
+        self.run_hook(self.pre_commit_script, filename)
+
+    def run_hook(self, script, *args):
+        """
+        Generic script hook executor.
+        """
+        if script:
+            command = [script]
+            if args:
+                command.extend(args)
+            try:
+                subprocess.check_call(
+                    command,
+                    env=get_clean_env(),
+                )
+            except (OSError, subprocess.CalledProcessError) as err:
+                self.log_error(
+                    'failed to run hook script %s: %s',
+                    script,
+                    err
+                )

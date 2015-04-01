@@ -49,7 +49,7 @@ from weblate.accounts.models import set_lang, remove_user, Profile
 from weblate.trans.models import Change, Project, SubProject
 from weblate.accounts.forms import (
     ProfileForm, SubscriptionForm, UserForm, ContactForm,
-    SubscriptionSettingsForm
+    SubscriptionSettingsForm, UserSettingsForm
 )
 from weblate import appsettings
 
@@ -142,6 +142,7 @@ def user_profile(request):
         ProfileForm,
         SubscriptionForm,
         SubscriptionSettingsForm,
+        UserSettingsForm,
     ]
 
     if request.method == 'POST':
@@ -152,7 +153,7 @@ def user_profile(request):
         if appsettings.DEMO_SERVER and request.user.username == 'demo':
             return deny_demo(request)
 
-        if min([form.is_valid() for form in forms]):
+        if all([form.is_valid() for form in forms]):
             # Save changes
             for form in forms:
                 form.save()
@@ -195,7 +196,8 @@ def user_profile(request):
             'form': forms[0],
             'subscriptionform': forms[1],
             'subscriptionsettingsform': forms[2],
-            'userform': forms[3],
+            'usersettingsform': forms[3],
+            'userform': forms[4],
             'profile': profile,
             'title': _('User profile'),
             'licenses': license_projects,

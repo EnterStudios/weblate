@@ -425,10 +425,12 @@ class NotificationTest(ViewTestCase):
         profile.save()
 
     def second_user(self):
-        return User.objects.create_user(
+        user = User.objects.create_user(
             username='seconduser',
             password='secondpassword'
         )
+        Profile.objects.create(user=user)
+        return user
 
     def test_notify_merge_failure(self):
         notify_merge_failure(
@@ -443,6 +445,17 @@ class NotificationTest(ViewTestCase):
             mail.outbox[0].subject,
             '[Weblate] Merge failure in Test/Test'
         )
+
+        # Add project owner
+        self.subproject.project.owner = self.second_user()
+        notify_merge_failure(
+            self.subproject,
+            'Failed merge',
+            'Error\nstatus'
+        )
+
+        # Check mail (second one is for admin)
+        self.assertEqual(len(mail.outbox), 5)
 
     def test_notify_new_string(self):
         notify_new_string(self.get_translation())
@@ -473,10 +486,11 @@ class NotificationTest(ViewTestCase):
         )
 
     def test_notify_new_language(self):
+        second_user = self.second_user()
         notify_new_language(
             self.subproject,
             Language.objects.filter(code='de'),
-            self.second_user()
+            second_user
         )
 
         # Check mail (second one is for admin)
@@ -485,6 +499,17 @@ class NotificationTest(ViewTestCase):
             mail.outbox[0].subject,
             '[Weblate] New language request in Test/Test'
         )
+
+        # Add project owner
+        self.subproject.project.owner = second_user
+        notify_new_language(
+            self.subproject,
+            Language.objects.filter(code='de'),
+            second_user,
+        )
+
+        # Check mail (second one is for admin)
+        self.assertEqual(len(mail.outbox), 5)
 
     def test_notify_new_contributor(self):
         unit = self.get_unit()
