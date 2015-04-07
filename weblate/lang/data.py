@@ -658,7 +658,9 @@ LOCALE_ALIASES = {
     'english-uk': 'en_GB',
     'portuguese_br': 'pt_BR',
     'portuguese_portugal': 'pt_PT',
+    'russian': 'ru',
     'serbo-croatian': 'sh',
+    'serbian': 'sr',
     'indonesian': 'id',
     'norwegian': 'nb',
     'spanish': 'es',
@@ -666,4 +668,7 @@ LOCALE_ALIASES = {
     'french': 'fr',
     # Android
     'be-rBY': 'be@latin',
+    # Misc invalid codes
+    'val-ES': 'ca@valencia',
+    'jp': 'ja',
 }

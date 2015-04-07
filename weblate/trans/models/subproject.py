@@ -34,7 +34,7 @@ from weblate.trans.formats import FILE_FORMAT_CHOICES, FILE_FORMATS
 from weblate.trans.mixins import PercentMixin, URLMixin, PathMixin
 from weblate.trans.filelock import FileLock
 from weblate.trans.util import (
-    is_repo_link, get_site_url, cleanup_repo_url, get_clean_env,
+    is_repo_link, get_site_url, cleanup_repo_url, get_clean_env, cleanup_path,
 )
 from weblate.trans.vcs import RepositoryException, VCS_REGISTRY, VCS_CHOICES
 from weblate.trans.models.translation import Translation
@@ -703,6 +703,13 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             self.log_info('pushing to remote repo')
             with self.repository_lock:
                 self.repository.push(self.branch)
+
+            if self.translation_set.exists():
+                Change.objects.create(
+                    action=Change.ACTION_PUSH,
+                    translation=self.translation_set.all()[0],
+                )
+
             return True
         except RepositoryException as error:
             self.log_error('failed to push on repo: %s', error)
@@ -734,6 +741,12 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             self.log_info('reseting to remote repo')
             with self.repository_lock:
                 self.repository.reset(self.branch)
+
+            if self.translation_set.exists():
+                Change.objects.create(
+                    action=Change.ACTION_RESET,
+                    translation=self.translation_set.all()[0],
+                )
         except RepositoryException as error:
             self.log_error('failed to reset on repo')
             msg = 'Error:\n%s' % str(error)
@@ -858,7 +871,8 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         Loads translations from VCS.
         '''
-        translations = []
+        translations = set()
+        languages = set()
         matches = self.get_mask_matches()
         for pos, path in enumerate(matches):
             code = self.get_lang_code(path)
@@ -872,10 +886,15 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                 pos + 1,
                 len(matches)
             )
+            lang = Language.objects.auto_get_or_create(code=code)
+            if lang.code in languages:
+                self.log_error('duplicate language found: %s', lang.code)
+                continue
             translation = Translation.objects.check_sync(
-                self, code, path, force, request=request
+                self, lang, code, path, force, request=request
             )
-            translations.append(translation.id)
+            translations.add(translation.id)
+            languages.add(lang.code)
 
         # Delete possibly no longer existing translations
         if langs is None:
@@ -1211,12 +1230,9 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             self.sync_git_repo()
 
         # Remove leading ./ from paths
-        if self.filemask.startswith('./'):
-            self.filemask = self.filemask[2:]
-        if self.template.startswith('./'):
-            self.template = self.template[2:]
-        if self.extra_commit_file.startswith('./'):
-            self.extra_commit_file = self.extra_commit_file[2:]
+        self.filemask = cleanup_path(self.filemask)
+        self.template = cleanup_path(self.template)
+        self.extra_commit_file = cleanup_path(self.extra_commit_file)
 
         # Save/Create object
         super(SubProject, self).save(*args, **kwargs)

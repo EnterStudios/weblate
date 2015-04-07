@@ -51,11 +51,11 @@ from weblate.trans.models.changes import Change
 class TranslationManager(models.Manager):
     # pylint: disable=W0232
 
-    def check_sync(self, subproject, code, path, force=False, request=None):
+    def check_sync(self, subproject, lang, code, path, force=False,
+                   request=None):
         '''
         Parses translation meta info and creates/updates translation object.
         '''
-        lang = Language.objects.auto_get_or_create(code=code)
         translation, dummy = self.get_or_create(
             language=lang,
             language_code=code,
@@ -460,6 +460,10 @@ class Translation(models.Model, URLMixin, PercentMixin, LoggerMixin):
 
         if change is None:
             change = Change.ACTION_UPDATE
+        if request is None:
+            user = None
+        else:
+            user = request.user
 
         # Check if we're not already up to date
         if self.revision != self.get_git_blob_hash():
@@ -512,6 +516,13 @@ class Translation(models.Model, URLMixin, PercentMixin, LoggerMixin):
                     newunit,
                     repr(newunit.source)
                 )
+                Change.object.create(
+                    unit=newunit,
+                    translation=self,
+                    action=Change.ACTION_FOUND_DUPLICATE,
+                    user=user,
+                    author=user
+                )
 
             # Store current unit ID
             created_units.add(newunit.id)
@@ -540,10 +551,6 @@ class Translation(models.Model, URLMixin, PercentMixin, LoggerMixin):
             self.invalidate_cache()
 
         # Store change entry
-        if request is None:
-            user = None
-        else:
-            user = request.user
         Change.objects.create(
             translation=self,
             action=change,
@@ -810,6 +817,10 @@ class Translation(models.Model, URLMixin, PercentMixin, LoggerMixin):
             'commiting %s as %s',
             self.filename,
             author
+        )
+        Change.objects.create(
+            action=Change.ACTION_COMMIT,
+            translation=self,
         )
         with self.subproject.repository_lock:
             self.__git_commit(author, timestamp, sync)
