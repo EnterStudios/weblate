@@ -20,12 +20,17 @@
 
 from django.utils.translation import ugettext as _
 from django.contrib import messages
-from django.contrib.auth.decorators import permission_required
+from django.core.exceptions import PermissionDenied
+from django.contrib.auth.decorators import login_required
 from weblate.trans.views.helper import (
     get_project, get_subproject, get_translation
 )
 from weblate.trans.filelock import FileLockException
 from weblate.trans.util import redirect_param
+from weblate.trans.permissions import (
+    can_commit_translation, can_update_translation, can_reset_translation,
+    can_push_translation,
+)
 
 
 def execute_locked(request, obj, message, call, *args, **kwargs):
@@ -95,85 +100,121 @@ def perform_reset(request, obj):
     )
 
 
-@permission_required('trans.commit_translation')
+@login_required
 def commit_project(request, project):
     obj = get_project(request, project)
 
+    if not can_commit_translation(request.user, obj):
+        raise PermissionDenied()
+
     return perform_commit(request, obj)
 
 
-@permission_required('trans.commit_translation')
+@login_required
 def commit_subproject(request, project, subproject):
     obj = get_subproject(request, project, subproject)
 
+    if not can_commit_translation(request.user, obj.project):
+        raise PermissionDenied()
+
     return perform_commit(request, obj)
 
 
-@permission_required('trans.commit_translation')
+@login_required
 def commit_translation(request, project, subproject, lang):
     obj = get_translation(request, project, subproject, lang)
 
+    if not can_commit_translation(request.user, obj.subproject.project):
+        raise PermissionDenied()
+
     return perform_commit(request, obj)
 
 
-@permission_required('trans.update_translation')
+@login_required
 def update_project(request, project):
     obj = get_project(request, project)
 
+    if not can_update_translation(request.user, obj):
+        raise PermissionDenied()
+
     return perform_update(request, obj)
 
 
-@permission_required('trans.update_translation')
+@login_required
 def update_subproject(request, project, subproject):
     obj = get_subproject(request, project, subproject)
 
+    if not can_update_translation(request.user, obj.project):
+        raise PermissionDenied()
+
     return perform_update(request, obj)
 
 
-@permission_required('trans.update_translation')
+@login_required
 def update_translation(request, project, subproject, lang):
     obj = get_translation(request, project, subproject, lang)
 
+    if not can_update_translation(request.user, obj.subproject.project):
+        raise PermissionDenied()
+
     return perform_update(request, obj)
 
 
-@permission_required('trans.push_translation')
+@login_required
 def push_project(request, project):
     obj = get_project(request, project)
 
+    if not can_push_translation(request.user, obj):
+        raise PermissionDenied()
+
     return perform_push(request, obj)
 
 
-@permission_required('trans.push_translation')
+@login_required
 def push_subproject(request, project, subproject):
     obj = get_subproject(request, project, subproject)
 
+    if not can_push_translation(request.user, obj.project):
+        raise PermissionDenied()
+
     return perform_push(request, obj)
 
 
-@permission_required('trans.push_translation')
+@login_required
 def push_translation(request, project, subproject, lang):
     obj = get_translation(request, project, subproject, lang)
 
+    if not can_push_translation(request.user, obj.subproject.project):
+        raise PermissionDenied()
+
     return perform_push(request, obj)
 
 
-@permission_required('trans.reset_translation')
+@login_required
 def reset_project(request, project):
     obj = get_project(request, project)
 
+    if not can_reset_translation(request.user, obj):
+        raise PermissionDenied()
+
     return perform_reset(request, obj)
 
 
-@permission_required('trans.reset_translation')
+@login_required
 def reset_subproject(request, project, subproject):
     obj = get_subproject(request, project, subproject)
 
+    if not can_reset_translation(request.user, obj.project):
+        raise PermissionDenied()
+
     return perform_reset(request, obj)
 
 
-@permission_required('trans.reset_translation')
+@login_required
 def reset_translation(request, project, subproject, lang):
     obj = get_translation(request, project, subproject, lang)
+
+    if not can_reset_translation(request.user, obj.subproject.project):
+        raise PermissionDenied()
 
     return perform_reset(request, obj)

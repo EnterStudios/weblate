@@ -1,4 +1,4 @@
-#!/bin/sh
+# -*- coding: utf-8 -*-
 #
 # Copyright © 2014 Daniel Tschan <tschan@puzzle.ch>
 #
@@ -18,16 +18,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-# Don't let OpenShift install weblate and its dependencies directly as this leads to timeouts during gear creation and deploys
-if [ -e $OPENSHIFT_REPO_DIR/setup.py ]; then
-  mv $OPENSHIFT_REPO_DIR/setup.py $OPENSHIFT_REPO_DIR/setup_weblate.py
-fi
+import os
 
-if [ -e $OPENSHIFT_REPO_DIR/requirements.txt ]; then
-	mv $OPENSHIFT_REPO_DIR/requirements.txt $OPENSHIFT_REPO_DIR/requirements-mandatory.txt
-fi
-
-# Show install/update page, will be replaced with app by install.sh
-# Link sources below $OPENSHIFT_REPO_DIR must be relative or they will be invalid after restore/clone operations
-mkdir -p $OPENSHIFT_REPO_DIR/wsgi
-ln -sf ../openshift/wsgi_install.py $OPENSHIFT_REPO_DIR/wsgi/application
+virtenv = os.environ['OPENSHIFT_PYTHON_DIR'] + '/virtenv/'
+virtualenv = os.path.join(virtenv, 'bin/activate_this.py')
+try:
+    execfile(virtualenv, dict(__file__=virtualenv))
+except IOError:
+    pass

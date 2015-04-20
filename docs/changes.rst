@@ -15,6 +15,9 @@ Released on ? 2015.
 * Simplified workflow for accepting suggestions.
 * Added project owners who always receive important notifications.
 * Allow to disable editing of monolingual template.
+* More detailed repository status view.
+* Direct link for editing template when changing translation.
+* Allow to add more permissions to project owners.
 
 weblate 2.2
 -----------

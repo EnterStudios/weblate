@@ -16,7 +16,7 @@ All settings are stored in :file:`settings.py` (as usual for Django).
     Please check also `Django's documentation`_ for parameters which configure
     Django itself.
 
-.. _`Django's documentation`: https://docs.djangoproject.com/en/1.7/ref/settings/
+.. _`Django's documentation`: https://docs.djangoproject.com/en/1.8/ref/settings/
 
 .. setting:: ANONYMOUS_USER_NAME
 
@@ -437,6 +437,8 @@ Weblate comes with few example hook scripts which you might find useful:
     Generates MO file from a PO file
 :file:`examples/hook-unwrap-po`
     Unwraps lines in a PO file.
+:file:`examples/hook-sort-properties`
+    Sort and cleanups Java properties file.
 
 .. note:: 
    

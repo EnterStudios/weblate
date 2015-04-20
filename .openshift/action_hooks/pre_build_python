@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
+#!/bin/sh
 #
-# Copyright © 2012 - 2015 Michal Čihař <michal@cihar.com>
+# Copyright © 2014 Daniel Tschan <tschan@puzzle.ch>
 #
 # This file is part of Weblate <http://weblate.org/>
 #
@@ -18,19 +18,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from django.contrib.auth.decorators import user_passes_test
+# Don't let OpenShift install weblate and its dependencies directly as this leads to timeouts during gear creation and deploys
+export OPENSHIFT_PYTHON_REQUIREMENTS_PATH=no_such_file
 
+if [ -e $OPENSHIFT_REPO_DIR/setup.py ]; then
+  mv $OPENSHIFT_REPO_DIR/setup.py $OPENSHIFT_REPO_DIR/setup_weblate.py
+fi
 
-def any_permission_required(*args):
-    '''
-    A decorator which checks user has any of the given permissions.
-    permission required can not be used in its place as that takes only a
-    single permission.
-    '''
-    def test_func(user):
-        for perm in args:
-            if user.has_perm(perm):
-                return True
-        return False
-
-    return user_passes_test(test_func)
+# Show install/update page, will be replaced with app by install.sh
+# Link sources below $OPENSHIFT_REPO_DIR must be relative or they will be invalid after restore/clone operations
+mkdir -p $OPENSHIFT_REPO_DIR/wsgi
+ln -sf ../openshift/wsgi_install.py $OPENSHIFT_REPO_DIR/wsgi/application

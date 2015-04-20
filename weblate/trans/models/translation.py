@@ -168,6 +168,7 @@ class Translation(models.Model, URLMixin, PercentMixin, LoggerMixin):
         '''
         super(Translation, self).__init__(*args, **kwargs)
         self._store = None
+        self.permissions_cache = {}
 
     @property
     def log_prefix(self):
@@ -271,18 +272,18 @@ class Translation(models.Model, URLMixin, PercentMixin, LoggerMixin):
             }
         )
 
-    def is_locked(self, request=None):
+    def is_locked(self, user=None):
         '''
         Check whether the translation is locked and
         possibly emits messages if request object is
         provided.
         '''
         return (
-            self.is_user_locked(request) or
+            self.is_user_locked(user) or
             self.subproject.locked
         )
 
-    def is_user_locked(self, request=None):
+    def is_user_locked(self, user=None):
         '''
         Checks whether there is valid user lock on this translation.
         '''
@@ -298,7 +299,7 @@ class Translation(models.Model, URLMixin, PercentMixin, LoggerMixin):
             return False
 
         # Is current user the one who has locked?
-        elif request is not None and self.lock_user == request.user:
+        elif user is not None and self.lock_user == user:
             return False
 
         else:
@@ -516,10 +517,10 @@ class Translation(models.Model, URLMixin, PercentMixin, LoggerMixin):
                     newunit,
                     repr(newunit.source)
                 )
-                Change.object.create(
+                Change.objects.create(
                     unit=newunit,
                     translation=self,
-                    action=Change.ACTION_FOUND_DUPLICATE,
+                    action=Change.ACTION_DUPLICATE_STRING,
                     user=user,
                     author=user
                 )
@@ -777,17 +778,17 @@ class Translation(models.Model, URLMixin, PercentMixin, LoggerMixin):
         if sync:
             self.store_hash()
 
-    def git_needs_commit(self):
+    def repo_needs_commit(self):
         '''
         Checks whether there are some not committed changes.
         '''
         return self.repository.needs_commit(self.filename)
 
-    def git_needs_merge(self):
-        return self.subproject.git_needs_merge()
+    def repo_needs_merge(self):
+        return self.subproject.repo_needs_merge()
 
-    def git_needs_push(self):
-        return self.subproject.git_needs_push()
+    def repo_needs_push(self):
+        return self.subproject.repo_needs_push()
 
     def git_commit(self, request, author, timestamp, force_commit=False,
                    sync=False, skip_push=False):
@@ -800,7 +801,7 @@ class Translation(models.Model, URLMixin, PercentMixin, LoggerMixin):
         translation rescan will be needed)
         '''
         # Is there something for commit?
-        if not self.git_needs_commit():
+        if not self.repo_needs_commit():
             return False
 
         # Can we delay commit?

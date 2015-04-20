@@ -1,6 +1,10 @@
 {% load translations %}
 {% load i18n %}
 {% load crispy_forms_tags %}
+{% load permissions %}
+
+{% can_edit_flags user project as user_can_edit_flags %}
+{% can_edit_priority user project as user_can_edit_priority %}
 
 <div class="row">
 <div class="col-lg-6">
@@ -18,7 +22,7 @@
 <tr>
 <th>{{ unit.translation.language }}</th>
 <td>{% get_state_flags unit %}</td>
-<td>{% show_checks unit.checks user %}</td>
+<td>{% show_checks unit.translation.subproject.project unit.checks user %}</td>
 <td><a href="{{ unit.get_absolute_url }}" class="button small-button">{% trans "Edit" %}</a></td>
 </tr>
 {% endfor %}
@@ -28,7 +32,7 @@
 
 <div class="col-lg-6">
 <table class="table table-condensed">
-{% if perms.edit_check_flags %}
+{% if user_can_edit_flags %}
 <tr>
 <td>
 <div class="btn-group pull-right flip">
@@ -55,7 +59,7 @@
 </td>
 </tr>
 {% endif %}
-{% if perms.edit_priority %}
+{% if user_can_edit_priority %}
 <tr>
 <td>
 <form method="POST" action="{% url 'edit_priority' pk=source.pk %}">

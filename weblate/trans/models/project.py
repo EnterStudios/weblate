@@ -155,6 +155,7 @@ class Project(models.Model, PercentMixin, URLMixin, PathMixin):
         Constructor to initialize some cache properties.
         """
         super(Project, self).__init__(*args, **kwargs)
+        self.permissions_cache = {}
 
     def has_acl(self, user):
         """
@@ -343,24 +344,24 @@ class Project(models.Model, PercentMixin, URLMixin, PathMixin):
         """
         return self.get_languages().count()
 
-    def git_needs_commit(self):
+    def repo_needs_commit(self):
         """
         Checks whether there are some not committed changes.
         """
         for component in self.subproject_set.all():
-            if component.git_needs_commit():
+            if component.repo_needs_commit():
                 return True
         return False
 
-    def git_needs_merge(self):
+    def repo_needs_merge(self):
         for component in self.subproject_set.all():
-            if component.git_needs_merge():
+            if component.repo_needs_merge():
                 return True
         return False
 
-    def git_needs_push(self):
+    def repo_needs_push(self):
         for component in self.subproject_set.all():
-            if component.git_needs_push():
+            if component.repo_needs_push():
                 return True
         return False
 

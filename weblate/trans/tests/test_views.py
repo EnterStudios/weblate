@@ -28,7 +28,7 @@ from cStringIO import StringIO
 from xml.dom import minidom
 
 from django.test.client import RequestFactory
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.core.urlresolvers import reverse
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core import mail
@@ -105,6 +105,13 @@ class ViewTestCase(RepoTestCase):
         self.translation_url = self.get_translation().get_absolute_url()
         self.project_url = self.project.get_absolute_url()
         self.subproject_url = self.subproject.get_absolute_url()
+
+    def make_manager(self):
+        """
+        Makes user a Manager.
+        """
+        group = Group.objects.get(name='Managers')
+        self.user.groups.add(group)
 
     def get_request(self, *args, **kwargs):
         '''
@@ -608,25 +615,25 @@ class EditTest(ViewTestCase):
         )
         # We should get to second message
         self.assertRedirectsOffset(response, self.translate_url, 1)
-        self.assertTrue(self.translation.git_needs_commit())
-        self.assertTrue(self.subproject.git_needs_commit())
-        self.assertTrue(self.subproject.project.git_needs_commit())
+        self.assertTrue(self.translation.repo_needs_commit())
+        self.assertTrue(self.subproject.repo_needs_commit())
+        self.assertTrue(self.subproject.project.repo_needs_commit())
 
         self.translation.commit_pending(self.get_request('/'))
 
-        self.assertFalse(self.translation.git_needs_commit())
-        self.assertFalse(self.subproject.git_needs_commit())
-        self.assertFalse(self.subproject.project.git_needs_commit())
+        self.assertFalse(self.translation.repo_needs_commit())
+        self.assertFalse(self.subproject.repo_needs_commit())
+        self.assertFalse(self.subproject.project.repo_needs_commit())
 
-        self.assertTrue(self.translation.git_needs_push())
-        self.assertTrue(self.subproject.git_needs_push())
-        self.assertTrue(self.subproject.project.git_needs_push())
+        self.assertTrue(self.translation.repo_needs_push())
+        self.assertTrue(self.subproject.repo_needs_push())
+        self.assertTrue(self.subproject.project.repo_needs_push())
 
         self.translation.do_push(self.get_request('/'))
 
-        self.assertFalse(self.translation.git_needs_push())
-        self.assertFalse(self.subproject.git_needs_push())
-        self.assertFalse(self.subproject.project.git_needs_push())
+        self.assertFalse(self.translation.repo_needs_push())
+        self.assertFalse(self.subproject.repo_needs_push())
+        self.assertFalse(self.subproject.project.repo_needs_push())
 
     def test_auto(self):
         '''
@@ -815,6 +822,22 @@ class ZenViewTest(ViewTestCase):
         self.assertContains(
             response,
             'You have reached end of translating.'
+        )
+
+    def test_save_zen(self):
+        unit = self.get_unit()
+        params = {
+            'checksum': unit.checksum,
+            'target_0': 'Zen translation'
+        }
+        response = self.client.post(
+            reverse('save_zen', kwargs=self.kw_translation),
+            params
+        )
+        self.assertContains(
+            response,
+            'Following fixups were applied to translation: '
+            'Trailing and leading whitespace'
         )
 
 

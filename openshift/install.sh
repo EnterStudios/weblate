@@ -51,23 +51,19 @@ source $OPENSHIFT_HOMEDIR/python/virtenv/bin/activate
 
 cd ${OPENSHIFT_REPO_DIR}
 
-sh "python ${OPENSHIFT_REPO_DIR}/setup_weblate.py develop"
+# Pin Django version to 1.8 to avoid surprises when 1.9 comes out.
+sed -e 's/Django[<>=]\+.*/Django>=1.8,<1.9/' $OPENSHIFT_REPO_DIR/requirements.txt >/tmp/requirements.txt
 
-# Pin Django version to 1.7 to avoid surprises when 1.8 comes out.
-sed -e 's/Django[<>=]\+.*/Django>1.7,<1.8/' $OPENSHIFT_REPO_DIR/requirements-mandatory.txt >/tmp/requirements.txt
-
-sh "pip install -r /tmp/requirements.txt"
+sh "pip install -U -r /tmp/requirements.txt"
 
 # Install optional dependencies without failing if some can't be installed.
 while read line; do
-  if [[ $line != -r* ]]; then
+  if [[ $line != -r* ]] && [[ $line != \#* ]]; then
     sh "pip install $line" || true
   fi
 done < $OPENSHIFT_REPO_DIR/requirements-optional.txt
 
-if [ ! -s $OPENSHIFT_DATA_DIR/weblate.db ]; then
-  rm -f ${OPENSHIFT_DATA_DIR}/.credentials
-fi
+sh "python ${OPENSHIFT_REPO_DIR}/setup_weblate.py develop"
 
 if [ ! -s $OPENSHIFT_REPO_DIR/weblate/fixtures/site_data.json ]; then
   mkdir -p $OPENSHIFT_REPO_DIR/weblate/fixtures
@@ -99,8 +95,7 @@ sh "python ${OPENSHIFT_REPO_DIR}/openshift/manage.py collectstatic --noinput"
 
 if [ ! -s $OPENSHIFT_DATA_DIR/.credentials ]; then
   echo "Generating Weblate admin credentials and writing them to ${OPENSHIFT_DATA_DIR}/.credentials"
-  sh "python ${OPENSHIFT_REPO_DIR}/openshift/manage.py createadmin"
-  sh "python ${OPENSHIFT_REPO_DIR}/openshift/secure_db.py | tee ${OPENSHIFT_DATA_DIR}/.credentials"
+  sh "python ${OPENSHIFT_REPO_DIR}/openshift/manage.py createadmin" |  tee ${OPENSHIFT_DATA_DIR}/.credentials
 fi
 
 if find_script_dir; then
@@ -114,5 +109,7 @@ gear stop
 # Link sources below $OPENSHIFT_REPO_DIR must be relative or they will be invalid after restore/clone operations
 ln -sf ../openshift/wsgi.py $OPENSHIFT_REPO_DIR/wsgi/application
 touch $OPENSHIFT_DATA_DIR/.installed
+
+ln -sf ../openshift/htaccess $OPENSHIFT_REPO_DIR/wsgi/.htaccess
 
 gear start

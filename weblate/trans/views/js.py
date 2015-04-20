@@ -20,18 +20,21 @@
 
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse, HttpResponseBadRequest, Http404
-from django.contrib.auth.decorators import permission_required
 from django.core.urlresolvers import reverse
+from django.core.exceptions import PermissionDenied
+from django.contrib.auth.decorators import login_required
 
-from weblate.trans.models import Unit, Check
+from weblate.trans.models import Unit, Check, Change
 from weblate.trans.machine import MACHINE_TRANSLATION_SERVICES
-from weblate.trans.decorators import any_permission_required
 from weblate.trans.views.helper import (
     get_project, get_subproject, get_translation
 )
 from weblate.trans.forms import PriorityForm, CheckFlagsForm
 from weblate.trans.validators import EXTRA_FLAGS
 from weblate.trans.checks import CHECKS
+from weblate.trans.permissions import (
+    can_use_mt, can_see_repository_status, can_ignore_check,
+)
 
 from urllib import urlencode
 import json
@@ -49,13 +52,15 @@ def get_string(request, checksum):
     return HttpResponse(units[0].get_source_plurals()[0])
 
 
-@permission_required('trans.use_mt')
+@login_required
 def translate(request, unit_id):
     '''
     AJAX handler for translating.
     '''
     unit = get_object_or_404(Unit, pk=int(unit_id))
     unit.check_acl(request)
+    if not can_use_mt(request.user, unit.translation):
+        raise PermissionDenied()
 
     service_name = request.GET.get('service', 'INVALID')
 
@@ -115,9 +120,13 @@ def get_unit_changes(request, unit_id):
     )
 
 
-@permission_required('trans.ignore_check')
+@login_required
 def ignore_check(request, check_id):
     obj = get_object_or_404(Check, pk=int(check_id))
+
+    if not can_ignore_check(request.user, obj.project):
+        raise PermissionDenied()
+
     obj.project.check_acl(request)
     # Mark check for ignoring
     obj.set_ignore()
@@ -125,50 +134,87 @@ def ignore_check(request, check_id):
     return HttpResponse('ok')
 
 
-@any_permission_required(
-    'trans.commit_translation',
-    'trans.update_translation'
-)
+@login_required
 def git_status_project(request, project):
     obj = get_project(request, project)
 
+    if not can_see_repository_status(request.user, obj):
+        raise PermissionDenied()
+
+    statuses = []
+    included = set()
+
+    not_linked = obj.subproject_set.exclude(repo__startswith='weblate://')
+    linked = obj.subproject_set.filter(repo__startswith='weblate://')
+
+    for subproject in not_linked:
+        statuses.append((
+            subproject.__unicode__(),
+            subproject.repository.status,
+        ))
+        included.add(subproject.get_repo_link_url())
+
+    for subproject in linked.exclude(repo__in=included):
+        statuses.append((
+            subproject.__unicode__(),
+            subproject.repository.status,
+        ))
+
     return render(
         request,
         'js/git-status.html',
         {
             'object': obj,
+            'project': obj,
+            'changes': Change.objects.filter(
+                subproject__project=obj,
+                action__in=Change.ACTIONS_REPOSITORY,
+            )[:10],
+            'statuses': statuses,
         }
     )
 
 
-@any_permission_required(
-    'trans.commit_translation',
-    'trans.update_translation'
-)
+@login_required
 def git_status_subproject(request, project, subproject):
     obj = get_subproject(request, project, subproject)
 
+    if not can_see_repository_status(request.user, obj.project):
+        raise PermissionDenied()
+
     return render(
         request,
         'js/git-status.html',
         {
             'object': obj,
+            'project': obj.project,
+            'changes': Change.objects.filter(
+                action__in=Change.ACTIONS_REPOSITORY,
+                subproject=obj,
+            )[:10],
+            'statuses': [(None, obj.repository.status)],
         }
     )
 
 
-@any_permission_required(
-    'trans.commit_translation',
-    'trans.update_translation'
-)
+@login_required
 def git_status_translation(request, project, subproject, lang):
     obj = get_translation(request, project, subproject, lang)
+
+    if not can_see_repository_status(request.user, obj.subproject.project):
+        raise PermissionDenied()
 
     return render(
         request,
         'js/git-status.html',
         {
             'object': obj,
+            'project': obj.subproject.project,
+            'changes': Change.objects.filter(
+                action__in=Change.ACTIONS_REPOSITORY,
+                subproject=obj.subproject,
+            )[:10],
+            'statuses': [(None, obj.subproject.repository.status)],
         }
     )
 
@@ -211,6 +257,7 @@ def get_detail(request, project, subproject, checksum):
         {
             'units': units,
             'source': source,
+            'project': subproject.project,
             'next': request.GET.get('next', ''),
             'priority_form': PriorityForm(
                 initial={'priority': source.priority}

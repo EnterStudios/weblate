@@ -20,7 +20,8 @@
 
 from django.http import Http404
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.contrib.auth.decorators import permission_required
+from django.core.exceptions import PermissionDenied
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.translation import ugettext as _
 from django.views.decorators.http import require_POST
@@ -30,6 +31,7 @@ from urllib import urlencode
 from weblate.trans.views.helper import get_subproject
 from weblate.trans.models import Translation, Source
 from weblate.trans.forms import PriorityForm, CheckFlagsForm
+from weblate.trans.permissions import can_edit_flags, can_edit_priority
 
 
 def get_source(request, project, subproject):
@@ -112,12 +114,16 @@ def show_source(request, project, subproject):
 
 
 @require_POST
-@permission_required('edit_priority')
+@login_required
 def edit_priority(request, pk):
     """
     Change source string priority.
     """
     source = get_object_or_404(Source, pk=pk)
+
+    if not can_edit_priority(request.user, source.subproject.project):
+        raise PermissionDenied()
+
     form = PriorityForm(request.POST)
     if form.is_valid():
         source.priority = form.cleaned_data['priority']
@@ -128,12 +134,16 @@ def edit_priority(request, pk):
 
 
 @require_POST
-@permission_required('edit_check_flags')
+@login_required
 def edit_check_flags(request, pk):
     """
     Change source string check flags.
     """
     source = get_object_or_404(Source, pk=pk)
+
+    if not can_edit_flags(request.user, source.subproject.project):
+        raise PermissionDenied()
+
     form = CheckFlagsForm(request.POST)
     if form.is_valid():
         source.check_flags = form.cleaned_data['flags']

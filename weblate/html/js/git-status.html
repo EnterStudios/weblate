@@ -1,23 +1,40 @@
 {% load i18n %}
-{% with object.git_needs_commit as needs_commit %}
+{% load translations %}
+{% load permissions %}
+{% with object.repo_needs_commit as needs_commit %}
+
+{% can_commit_translation user project as user_can_commit_translation %}
+{% can_update_translation user project as user_can_update_translation %}
+{% can_push_translation user project as user_can_push_translation %}
+{% can_reset_translation user project as user_can_reset_translation %}
+{% can_lock_subproject user project as user_can_lock_subproject %}
+
 
 <div class="row">
-<div class="col-lg-6">
+<div class="col-md-8">
 
 <div class="panel panel-primary">
 <div class="panel-heading"><h4 class="panel-title">{% trans "Repository status" %}</h4></div>
 <div class="panel-body">
 {% if needs_commit %}
-<p>{% trans "There are some not committed changes!" %}</p>
+<div class="alert alert-info" role="alert">{% trans "There are some not committed changes!" %}</div>
 {% endif %}
-{% if object.git_needs_merge %}
-<p>{% trans "The remote repository needs to be merged!" %}</p>
+{% if changes.0.is_merge_failure %}
+<div class="alert alert-danger" role="alert">
+<p>{% trans "There has been a merge failure on the repository:" %}</p>
+<pre>{{ changes.0.target }}</pre>
+<p><a href="{% documentation "faq" "merge" %}">{% trans "Check our FAQ for information how to resolve this." %}</a></p>
+</div>
+{% else %}
+{% if object.repo_needs_merge %}
+<div class="alert alert-warning" role="alert">{% trans "The remote repository needs to be merged!" %}</div>
 {% endif %}
-{% if object.git_needs_push %}
-<p>{% trans "There are some new commits in the local repository!" %}</p>
+{% if object.repo_needs_push %}
+<div class="alert alert-warning" role="alert">{% trans "There are some new commits in the local repository!" %}</div>
 {% endif %}
-{% if not needs_commit and not object.git_needs_merge and not object.git_needs_push %}
-<p>{% trans "The local repository is up to date." %}</p>
+{% if not needs_commit and not object.repo_needs_merge and not object.repo_needs_push %}
+<div class="alert alert-success" role="alert">{% trans "The local repository is up to date." %}</div>
+{% endif %}
 {% endif %}
 
 {% if object.subproject_set %}
@@ -43,27 +60,50 @@
 <div class="panel panel-primary">
 <div class="panel-heading"><h4 class="panel-title">{% trans "Repository details" %}</h4></div>
       <div class="panel-body">
-        {% if object.subproject_set %}
-        {% for sp in object.subproject_set.all %}
-        <h4>{{ sp }}</h3>
-        <pre>{{ sp.repository.status }}</pre>
-        {% endfor %}
-        {% else %}
-        <pre>{{ object.repository.status }}</pre>
+        {% for status in statuses %}
+        {% if status.0 %}
+        <h4>{{ status.0 }}</h4>
         {% endif %}
+        <pre>{{ status.1 }}</pre>
+        {% endfor %}
+      </div>
+</div>
+
+<div class="panel panel-primary">
+<div class="panel-heading"><h4 class="panel-title">{% trans "Repository changes" %}</h4></div>
+      <div class="panel-body">
+        <table class="table">
+        {% for change in changes %}
+        <tr>
+        <td>{{ change.timestamp|naturaltime }}</td>
+        <td>{{ change.get_user_display }}</td>
+        <td>{{ change.get_action_display }}</td>
+        <td>
+        {% if change.translation %}
+            <a href="{{ change.get_translation_url }}">{{ change.translation.language }}</a>
+        {% endif %}
+        </td>
+        </tr>
+        {% if change.target %}
+        <tr>
+        <td colspan="4"><pre>{{ change.target }}</td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+        </table>
       </div>
 </div>
 
 </div>
 
-<div class="col-lg-6">
-{% if perms.trans.commit_translation or perms.trans.update_translation %}
+<div class="col-md-4">
 <div class="panel panel-primary">
 <div class="panel-heading"><h4 class="panel-title">{% trans "Repository tools" %}</h4></div>
 <div class="panel-body">
 
 <table class="table table-condensed">
 
+{% if user_can_commit_translation %}
 <tr>
 <td>
 <a href="{{ object.get_commit_url }}" class="btn btn-default{% if not needs_commit %} disabled{% endif %}">{% trans "Commit" %}</a>
@@ -72,32 +112,42 @@
 <p class="helptext">{% trans "Commit pending changes to the local repository" %}</p>
 </td>
 </tr>
+{% endif %}
 
+{% if user_can_update_translation %}
 <tr>
 <td>
-<a href="{{ object.get_update_url }}" class="btn btn-default{% if not perms.trans.update_translation %} disabled{% endif %}">{% trans "Pull" %}</a>
+<a href="{{ object.get_update_url }}" class="btn btn-default">{% trans "Pull" %}</a>
 </td>
 <td>
 <p class="helptext">{% trans "Pull changes from the remote repository" %}</p>
 </td>
 </tr>
+{% endif %}
+
+{% if user_can_push_translation %}
 <tr>
 <td>
-<a href="{{ object.get_push_url }}" class="btn btn-default{% if not perms.trans.push_translation or not object.can_push %} disabled{% endif %}">{% trans "Push" %}</a>
+<a href="{{ object.get_push_url }}" class="btn btn-default{% if not object.can_push %} disabled{% endif %}">{% trans "Push" %}</a>
 </td>
 <td>
 <p class="helptext">{% trans "Push changes to the remote repository" %}</p>
 </td>
 </tr>
+{% endif %}
+
+{% if user_can_update_translation %}
 <tr>
 <td>
-<a href="{{ object.get_update_url }}?method=rebase" class="btn btn-default{% if not perms.trans.update_translation %} disabled{% endif %}">{% trans "Rebase" %}</a>
+<a href="{{ object.get_update_url }}?method=rebase" class="btn btn-default">{% trans "Rebase" %}</a>
 </td>
 <td>
 <p class="helptext">{% trans "Rebase local changes onto the remote repository" %}</p>
 </td>
 </tr>
-{% if perms.trans.reset_translation %}
+{% endif %}
+
+{% if user_can_reset_translation %}
 <tr>
 <td>
 <a href="{{ object.get_reset_url }}" class="btn btn-default confirm-reset">{% trans "Reset" %}</a>
@@ -109,7 +159,7 @@
 {% endif %}
 
 
-{% if perms.trans.lock_subproject and object.is_lockable %}
+{% if user_can_lock_subproject and object.is_lockable %}
 {% if object.locked %}
 <tr>
 <td>
@@ -136,7 +186,6 @@
 
 </div>
 
-{% endif %}
 </div>
 </div>
 {% endwith %}

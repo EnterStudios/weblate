@@ -38,14 +38,7 @@ class ChangeManager(models.Manager):
         if prefetch:
             base = base.prefetch()
         return base.filter(
-            action__in=(
-                Change.ACTION_CHANGE,
-                Change.ACTION_NEW,
-                Change.ACTION_AUTO,
-                Change.ACTION_ACCEPT,
-                Change.ACTION_REVERT,
-                Change.ACTION_UPLOAD,
-            ),
+            action__in=Change.ACTIONS_CONTENT,
             user__isnull=False,
         )
 
@@ -154,6 +147,10 @@ class Change(models.Model):
     ACTION_COMMIT = 17
     ACTION_PUSH = 18
     ACTION_RESET = 19
+    ACTION_MERGE = 20
+    ACTION_REBASE = 21
+    ACTION_FAILED_MERGE = 22
+    ACTION_FAILED_REBASE = 23
 
     ACTION_CHOICES = (
         (ACTION_UPDATE, ugettext_lazy('Resource update')),
@@ -176,9 +173,56 @@ class Change(models.Model):
         (ACTION_COMMIT, ugettext_lazy('Commited changes')),
         (ACTION_PUSH, ugettext_lazy('Pushed changes')),
         (ACTION_RESET, ugettext_lazy('Reset repository')),
+        (ACTION_MERGE, ugettext_lazy('Merged repository')),
+        (ACTION_REBASE, ugettext_lazy('Rebased repository')),
+        (ACTION_FAILED_MERGE, ugettext_lazy('Failed merge on repository')),
+        (ACTION_FAILED_REBASE, ugettext_lazy('Failed rebase on repository')),
     )
 
+    ACTIONS_SUBPROJECT = set((
+        ACTION_LOCK,
+        ACTION_UNLOCK,
+        ACTION_DUPLICATE_STRING,
+        ACTION_PUSH,
+        ACTION_RESET,
+        ACTION_MERGE,
+        ACTION_REBASE,
+        ACTION_FAILED_MERGE,
+        ACTION_FAILED_REBASE,
+    ))
+
+    ACTIONS_REVERTABLE = set((
+        ACTION_ACCEPT,
+        ACTION_REVERT,
+        ACTION_CHANGE,
+        ACTION_NEW,
+    ))
+
+    ACTIONS_CONTENT = set((
+        ACTION_CHANGE,
+        ACTION_NEW,
+        ACTION_AUTO,
+        ACTION_ACCEPT,
+        ACTION_REVERT,
+        ACTION_UPLOAD,
+    ))
+
+    ACTIONS_REPOSITORY = set((
+        ACTION_PUSH,
+        ACTION_RESET,
+        ACTION_MERGE,
+        ACTION_REBASE,
+        ACTION_FAILED_MERGE,
+        ACTION_FAILED_REBASE,
+    ))
+
+    ACTIONS_MERGE_FAILURE = set((
+        ACTION_FAILED_MERGE,
+        ACTION_FAILED_REBASE,
+    ))
+
     unit = models.ForeignKey('Unit', null=True)
+    subproject = models.ForeignKey('SubProject', null=True)
     translation = models.ForeignKey('Translation', null=True)
     dictionary = models.ForeignKey('Dictionary', null=True)
     user = models.ForeignKey(User, null=True)
@@ -204,6 +248,9 @@ class Change(models.Model):
             'user': self.get_user_display(False),
         }
 
+    def is_merge_failure(self):
+        return self.action in self.ACTIONS_MERGE_FAILURE
+
     def get_user_display(self, icon=True):
         return get_user_display(self.user, icon, link=True)
 
@@ -225,6 +272,8 @@ class Change(models.Model):
         '''
         if self.translation is not None:
             return self.translation.get_absolute_url()
+        elif self.subproject is not None:
+            return self.subproject.get_absolute_url()
         elif self.dictionary is not None:
             return self.dictionary.get_parent_url()
         return None
@@ -235,6 +284,8 @@ class Change(models.Model):
         '''
         if self.translation is not None:
             return unicode(self.translation)
+        elif self.subproject is not None:
+            return unicode(self.subproject)
         elif self.dictionary is not None:
             return '%s/%s' % (
                 self.dictionary.project,
@@ -246,10 +297,12 @@ class Change(models.Model):
         return (
             self.unit is not None and
             self.target and
-            self.action in (
-                Change.ACTION_ACCEPT,
-                Change.ACTION_REVERT,
-                Change.ACTION_CHANGE,
-                Change.ACTION_NEW
-            )
+            self.action in self.ACTIONS_REVERTABLE
         )
+
+    def save(self, *args, **kwargs):
+        if self.unit:
+            self.translation = self.unit.translation
+        if self.translation:
+            self.subproject = self.translation.subproject
+        super(Change, self).save(*args, **kwargs)

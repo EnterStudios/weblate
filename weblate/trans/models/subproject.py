@@ -309,6 +309,15 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         default='',
         help_text=ugettext_lazy('Optional URL with license details.'),
     )
+    agreement = models.TextField(
+        verbose_name=ugettext_lazy('Contributor agreement'),
+        blank=True,
+        default='',
+        help_text=ugettext_lazy(
+            'Agreement which needs to be approved before user can '
+            'translate this component.'
+        )
+    )
 
     # Adding new language
     new_lang = models.CharField(
@@ -642,7 +651,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         self.update_remote_branch()
 
         # do we have something to merge?
-        if not self.git_needs_merge() and method != 'rebase':
+        if not self.repo_needs_merge() and method != 'rebase':
             return True
 
         # commit possible pending changes
@@ -658,7 +667,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         self.create_translations(request=request)
 
         # Push after possible merge
-        if (self.git_needs_push() and
+        if (self.repo_needs_push() and
                 ret and
                 self.project.push_on_commit and
                 self.can_push()):
@@ -687,7 +696,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             self.commit_pending(request, skip_push=True)
 
         # Do we have anything to push?
-        if not self.git_needs_push():
+        if not self.repo_needs_push():
             return False
 
         if do_update:
@@ -695,7 +704,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             self.do_update(request)
 
             # Were all changes merged?
-            if self.git_needs_merge():
+            if self.repo_needs_merge():
                 return False
 
         # Do actual push
@@ -704,11 +713,11 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             with self.repository_lock:
                 self.repository.push(self.branch)
 
-            if self.translation_set.exists():
-                Change.objects.create(
-                    action=Change.ACTION_PUSH,
-                    translation=self.translation_set.all()[0],
-                )
+            Change.objects.create(
+                action=Change.ACTION_PUSH,
+                user=request.user if request else None,
+                subproject=self,
+            )
 
             return True
         except RepositoryException as error:
@@ -742,11 +751,11 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
             with self.repository_lock:
                 self.repository.reset(self.branch)
 
-            if self.translation_set.exists():
-                Change.objects.create(
-                    action=Change.ACTION_RESET,
-                    translation=self.translation_set.all()[0],
-                )
+            Change.objects.create(
+                action=Change.ACTION_RESET,
+                user=request.user if request else None,
+                subproject=self,
+            )
         except RepositoryException as error:
             self.log_error('failed to reset on repo')
             msg = 'Error:\n%s' % str(error)
@@ -767,12 +776,15 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
 
         return True
 
+    def get_repo_link_url(self):
+        return 'weblate://%s/%s' % (self.project.slug, self.slug)
+
     def get_linked_childs(self):
         '''
         Returns list of subprojects which link repository to us.
         '''
         return SubProject.objects.filter(
-            repo='weblate://%s/%s' % (self.project.slug, self.slug)
+            repo=self.get_repo_link_url()
         )
 
     def commit_pending(self, request, from_link=False, skip_push=False):
@@ -812,9 +824,13 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         if method == 'rebase':
             method = self.repository.rebase
             error_msg = _('Failed to rebase our branch onto remote branch %s.')
+            action = Change.ACTION_REBASE
+            action_failed = Change.ACTION_FAILED_REBASE
         else:
             method = self.repository.merge
             error_msg = _('Failed to merge remote branch into %s.')
+            action = Change.ACTION_MERGE
+            action_failed = Change.ACTION_FAILED_MERGE
 
         with self.repository_lock:
             try:
@@ -824,8 +840,14 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                     '%s remote into repo',
                     self.merge_style,
                 )
+                if self.id:
+                    Change.objects.create(
+                        subproject=self,
+                        user=request.user if request else None,
+                        action=action,
+                    )
                 return True
-            except Exception as error:
+            except RepositoryException as error:
                 # In case merge has failer recover
                 error = str(error)
                 status = self.repository.status()
@@ -839,6 +861,14 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
 
                 # Reset repo back
                 method(abort=True)
+
+        if self.id:
+            Change.objects.create(
+                subproject=self,
+                user=request.user if request else None,
+                action=action_failed,
+                target=str(error),
+            )
 
         # Notify subscribers and admins
         self.notify_merge_failure(error, status)
@@ -865,6 +895,8 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                 matches.add(self.template)
             else:
                 matches.discard(self.template)
+        if self.new_base and self.new_base != self.template:
+            matches.discard(self.new_base)
         return sorted(matches)
 
     def create_translations(self, force=False, langs=None, request=None):
@@ -1250,28 +1282,28 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         '''
         return self.translation_set.get_percents()
 
-    def git_needs_commit(self):
+    def repo_needs_commit(self):
         '''
         Checks whether there are some not committed changes.
         '''
         if self.is_repo_link:
-            return self.linked_subproject.git_needs_commit()
+            return self.linked_subproject.repo_needs_commit()
         return self.repository.needs_commit()
 
-    def git_needs_merge(self):
+    def repo_needs_merge(self):
         '''
         Checks whether there is something to merge from remote repository.
         '''
         if self.is_repo_link:
-            return self.linked_subproject.git_needs_merge()
+            return self.linked_subproject.repo_needs_merge()
         return self.repository.needs_merge(self.branch)
 
-    def git_needs_push(self):
+    def repo_needs_push(self):
         '''
         Checks whether there is something to push to remote repository.
         '''
         if self.is_repo_link:
-            return self.linked_subproject.git_needs_push()
+            return self.linked_subproject.repo_needs_push()
         return self.repository.needs_push(self.branch)
 
     @property
@@ -1397,7 +1429,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         self.save()
         if self.translation_set.exists():
             Change.objects.create(
-                translation=self.translation_set.all()[0],
+                subproject=self,
                 user=user,
                 action=Change.ACTION_LOCK,
             )
@@ -1408,7 +1440,7 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
         self.save()
         if self.translation_set.exists():
             Change.objects.create(
-                translation=self.translation_set.all()[0],
+                subproject=self,
                 user=user,
                 action=Change.ACTION_UNLOCK,
             )
@@ -1432,9 +1464,16 @@ class SubProject(models.Model, PercentMixin, URLMixin, PathMixin):
                     command,
                     env=get_clean_env(),
                 )
+                return True
             except (OSError, subprocess.CalledProcessError) as err:
                 self.log_error(
                     'failed to run hook script %s: %s',
                     script,
                     err
                 )
+                return False
+
+    def get_editable_template(self):
+        if not self.edit_template or not self.has_template():
+            return None
+        return self.translation_set.get(filename=self.template)

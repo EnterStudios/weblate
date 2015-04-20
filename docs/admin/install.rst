@@ -102,7 +102,7 @@ Most of requirements are available either directly in openSUSE or in
 .. code-block:: sh
 
     zypper install python-Django translate-toolkit \
-        python-Whoosh python-Pillow python-South python-python-social-auth \
+        python-Whoosh python-Pillow python-python-social-auth \
         python-babel Git mercurial
 
     
@@ -205,7 +205,7 @@ Creating database for Weblate
 It is recommended to run Weblate on some database server. Using SQLite backend
 is really good for testing purposes only.
     
-.. seealso:: :ref:`production-database`, `Django's databases <https://docs.djangoproject.com/en/1.7/ref/databases/>`_
+.. seealso:: :ref:`production-database`, `Django's databases <https://docs.djangoproject.com/en/1.8/ref/databases/>`_
 
 Creating database in PostgreSQL
 +++++++++++++++++++++++++++++++
@@ -253,7 +253,7 @@ options:
     List of site administrators to receive notifications when something goes
     wrong, for example notifications on failed merge or Django errors.
 
-    .. seealso:: https://docs.djangoproject.com/en/1.7/ref/settings/#admins
+    .. seealso:: https://docs.djangoproject.com/en/1.8/ref/settings/#admins
 
 ``ALLOWED_HOSTS``
 
@@ -264,7 +264,16 @@ options:
 
         ALLOWED_HOSTS = ['demo.weblate.org']
 
-    .. seealso:: https://docs.djangoproject.com/en/dev/ref/settings/#std:setting-ALLOWED_HOSTS
+    .. seealso:: https://docs.djangoproject.com/en/1.8/ref/settings/#std:setting-ALLOWED_HOSTS
+
+``SESSION_ENGINE``
+
+    Configure how your sessions will be stored. In case you keep default
+    database backed engine you should schedule
+    :command:`./manage.py clearsessions` to remove stale session data from the
+    database.
+
+    .. seealso:: https://docs.djangoproject.com/en/1.8/topics/http/sessions/#configuring-sessions
 
 ``DATABASES``
 
@@ -274,8 +283,8 @@ options:
     .. seealso:: 
        
         :ref:`database-setup`
-        https://docs.djangoproject.com/en/1.7/ref/settings/#databases, 
-        https://docs.djangoproject.com/en/1.7/ref/databases/
+        https://docs.djangoproject.com/en/1.8/ref/settings/#databases, 
+        https://docs.djangoproject.com/en/1.8/ref/databases/
 
 ``DEBUG``
 
@@ -286,7 +295,7 @@ options:
     Debug mode also slows down Weblate as Django stores much more information
     internally in this case.
 
-    .. seealso:: https://docs.djangoproject.com/en/1.7/ref/settings/#debug
+    .. seealso:: https://docs.djangoproject.com/en/1.8/ref/settings/#debug
 
 ``DEFAULT_FROM_EMAIL``
 
@@ -414,7 +423,7 @@ environment), for example setup for MySQL:
         }
     }
 
-.. seealso:: :ref:`installation`, `Django's databases <https://docs.djangoproject.com/en/1.7/ref/databases/>`_
+.. seealso:: :ref:`installation`, `Django's databases <https://docs.djangoproject.com/en/1.8/ref/databases/>`_
 
 .. _production-cache:
 
@@ -433,7 +442,7 @@ variable, for example:
         }
     }
 
-.. seealso:: :ref:`production-cache-avatar`, `Django’s cache framework <https://docs.djangoproject.com/en/1.7/topics/cache/>`_
+.. seealso:: :ref:`production-cache-avatar`, `Django’s cache framework <https://docs.djangoproject.com/en/1.8/topics/cache/>`_
 
 .. _production-cache-avatar:
 
@@ -460,7 +469,7 @@ recommended to use separate, file backed cache for this purpose:
             },
         }
 
-.. seealso:: :setting:`ENABLE_AVATARS`, :ref:`production-cache`, `Django’s cache framework <https://docs.djangoproject.com/en/1.7/topics/cache/>`_
+.. seealso:: :setting:`ENABLE_AVATARS`, :ref:`production-cache`, `Django’s cache framework <https://docs.djangoproject.com/en/1.8/topics/cache/>`_
 
 .. _production-email:
 
@@ -481,8 +490,8 @@ have correct sender address, please configure ``SERVER_EMAIL`` and
     `DEFAULT_FROM_EMAIL documentation`_,
     `SERVER_EMAIL documentation`_
 
-.. _DEFAULT_FROM_EMAIL documentation: https://docs.djangoproject.com/en/1.7/ref/settings/#default-from-email
-.. _SERVER_EMAIL documentation: https://docs.djangoproject.com/en/1.7/ref/settings/#server-email
+.. _DEFAULT_FROM_EMAIL documentation: https://docs.djangoproject.com/en/1.8/ref/settings/#default-from-email
+.. _SERVER_EMAIL documentation: https://docs.djangoproject.com/en/1.8/ref/settings/#server-email
 
 
 .. _production-hosts:
@@ -493,7 +502,7 @@ Allowed hosts setup
 Django 1.5 and newer require ``ALLOWED_HOSTS`` to hold list of domain names
 your site is allowed to serve, having it empty will block any request.
 
-.. seealso:: https://docs.djangoproject.com/en/dev/ref/settings/#std:setting-ALLOWED_HOSTS
+.. seealso:: https://docs.djangoproject.com/en/1.8/ref/settings/#std:setting-ALLOWED_HOSTS
 
 .. _production-avatar:
 
@@ -528,7 +537,7 @@ really use own value rather than using the one coming from example setup.
 You can generate new key using :file:`examples/generate-secret-key` shipped
 with Weblate.
 
-    .. seealso:: https://docs.djangoproject.com/en/dev/ref/settings/#std:setting-SECRET_KEY
+    .. seealso:: https://docs.djangoproject.com/en/1.8/ref/settings/#std:setting-SECRET_KEY
 
 .. _production-admin-files:
 
@@ -591,7 +600,7 @@ configure it using following snippet:
         )),
     )
 
-.. seealso:: `Django documentation on template loading <https://docs.djangoproject.com/en/1.7/ref/templates/api/#django.template.loaders.cached.Loader>`_
+.. seealso:: `Django documentation on template loading <https://docs.djangoproject.com/en/1.8/ref/templates/api/#django.template.loaders.cached.Loader>`_
 
 .. _server:
 
@@ -623,7 +632,7 @@ use that for following paths:
 Additionally you should setup rewrite rule to serve :file:`media/favicon.ico`
 as :file:`favicon.ico`.
 
-.. seealso:: https://docs.djangoproject.com/en/1.7/howto/deployment/
+.. seealso:: https://docs.djangoproject.com/en/1.8/howto/deployment/
 
 Sample configuration for Lighttpd
 +++++++++++++++++++++++++++++++++
@@ -743,17 +752,31 @@ Installation
 You can install Weblate on OpenShift directly from Weblate's github repository
 with the following command:
 
-.. parsed-literal::
+.. code-block:: sh
 
-    rhc -aweblate app create -t python-2.7 --from-code \https://github.com/nijel/weblate.git#weblate-|version| --no-git
+    rhc -aweblate app create -t python-2.7 --from-code https://github.com/nijel/weblate.git --no-git
 
 The ``-a`` option defines the name of your weblate installation, ``weblate`` in
-this instance. You are free to specify a different name.  The identifier right
-of the ``#`` sign identifies the version of Weblate to install.  For a list of
-available versions see here: https://github.com/nijel/weblate/tags. Please note
-that only version 2.0 and newer can be installed on OpenShift, as older
-versions don't include the necessary configuration files. The ``--no-git``
-option skips the creation of a local git repository.
+this instance. You are free to specify a different name. 
+
+Optionally you can specify tag identifier right of the ``#`` sign to identify
+the version of Weblate to install (for example specify
+``https://github.com/nijel/weblate.git#weblate-2.0`` to install Weblate 2.0).
+For a list of available versions see here:
+https://github.com/nijel/weblate/tags. Please note that only version 2.0 and
+newer can be installed on OpenShift, as older versions don't include the
+necessary configuration files. The ``--no-git`` option skips the creation of a
+local git repository.
+
+You can also specify which database you want to use:
+
+.. code-block:: sh
+
+    # For MySQL
+    rhc -aweblate app create -t python-2.7 -t mysql-5.5 --from-code https://github.com/nijel/weblate.git --no-git
+
+    # For PostgreSQL
+    rhc -aweblate app create -t python-2.7 -t postgresql-9.2 --from-code https://github.com/nijel/weblate.git --no-git
 
 Default Configuration
 +++++++++++++++++++++
@@ -763,11 +786,11 @@ After installation on OpenShift Weblate is ready to use and preconfigured as fol
 * SQLite embedded database (DATABASES)
 * Random admin password
 * Random Django secret key (SECRET_KEY)
-* Indexing offloading if the cron cartridge is installed (OFFLOAD_INDEXING)
+* Indexing offloading if the cron cartridge is installed (:setting:`OFFLOAD_INDEXING`)
 * Committing of pending changes if the cron cartridge is installed (commit_pending)
-* Weblate machine translations for suggestions bases on previous translations (MACHINE_TRANSLATION_SERVICES)
-* Source language for machine translations set to "en-us" (SOURCE_LANGUAGE)
-* Weblate directories (STATIC_ROOT, DATA_DIR, TTF_PATH, Avatar cache) set according to OpenShift requirements/conventions
+* Weblate machine translations for suggestions bases on previous translations (:setting:`MACHINE_TRANSLATION_SERVICES`)
+* Source language for machine translations set to "en-us" (:setting:`SOURCE_LANGUAGE`)
+* Weblate directories (STATIC_ROOT, :setting:`DATA_DIR`, :setting:`TTF_PATH`, Avatar cache) set according to OpenShift requirements/conventions
 * Django site name and ALLOWED_HOSTS set to DNS name of your OpenShift application
 * Email sender addresses set to no-reply@<OPENSHIFT_CLOUD_DOMAIN>, where <OPENSHIFT_CLOUD_DOMAIN> is the domain OpenShift runs under. In case of OpenShift Online it's rhcloud.com.
 
@@ -864,9 +887,9 @@ Visit the newly given URL with a browser and wait for the install/update page to
 
 You can update your Weblate installation on OpenShift directly from Weblate's github repository by executing:
 
-.. parsed-literal::
+.. code-block:: sh
 
-    rhc -aweblate2 ssh update \https://github.com/nijel/weblate.git#weblate-|version|
+    rhc -aweblate2 ssh update https://github.com/nijel/weblate.git
 
 The identifier right of the ``#`` sign identifies the version of Weblate to install.
 For a list of available versions see here: https://github.com/nijel/weblate/tags.
@@ -874,9 +897,9 @@ Please note that the update process will not work if you modified the git reposi
 You can force an update by specifying the ``--force`` option to the update script. However any changes you made to the
 git repository of your installation will be discarded:
 
-.. parsed-literal::
+.. code-block:: sh
 
-   rhc -aweblate2 ssh update --force \https://github.com/nijel/weblate.git#weblate-|version|
+   rhc -aweblate2 ssh update --force https://github.com/nijel/weblate.git
 
 The ``--force`` option is also needed when downgrading to an older version.
 Please note that only version 2.0 and newer can be installed on OpenShift,

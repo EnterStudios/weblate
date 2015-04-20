@@ -3,6 +3,7 @@
 {% load static %}
 {% load translations %}
 {% load crispy_forms_tags %}
+{% load permissions %}
 
 {% block extra_meta %}
 <link rel="canonical" href="{{ unit.get_absolute_url }}" />
@@ -17,10 +18,17 @@
 
 {% block content %}
 
-{% if perms.trans.save_translation %}
-{% if perms.trans.save_template or not object.is_template %}
+{% can_translate user unit.translation as user_can_translate %}
+{% can_suggest user unit.translation as user_can_suggest %}
+{% can_accept_suggestion user unit.translation as user_can_accept_suggestion %}
+{% can_delete_suggestion user unit.translation as user_can_delete_suggestion %}
+{% can_vote_suggestion user unit.translation as user_can_vote_suggestion %}
+{% can_use_mt user unit.translation as user_can_use_mt %}
+{% can_edit_flags user unit.translation.subproject.project as user_can_edit_flags %}
+{% can_edit_priority user unit.translation.subproject.project as user_can_edit_priority %}
+
+{% if user_can_translate %}
 <a href="{% url 'zen' project=unit.translation.subproject.project.slug subproject=unit.translation.subproject.slug lang=unit.translation.language.code %}?sid={{ search_id }}" title="{% trans "Edit in Zen mode" %}" class="btn btn-default pull-right flip"><i class="fa fa-arrows-alt"></i> {% trans "Zen" %}</a>
-{% endif %}
 {% endif %}
 
 {% with unit.translation as object %}
@@ -73,35 +81,34 @@
     </div>
     {% endif %}
     <div class="form-group">
+    {% with unit.translation.subproject.get_editable_template as edit_template %}
+    {% can_translate user edit_template as user_can_edit_template %}
+    {% if user_can_edit_template %}
+    <a class="pull-right flip" title="{% trans "Edit source string" %}"href="{{ edit_template.get_translate_url }}?checksum={{ unit.checksum }}"><i class="fa fa-pencil"></i></a>
+    {% endif %}
+    {% endwith %}
     <label>{% trans "Source" %}</label>
     {% format_translation unit.source search_match=search_query num_plurals=unit.translation.language.nplurals %}
     </div>
     {{ form|crispy }}
   </div>
   <div class="panel-footer">
-    {% if not unit.only_vote_suggestions or perms.trans.override_suggestion %}
-    {% if perms.trans.save_translation %}
-    {% if perms.trans.save_template or not object.is_template %}
+    {% if user_can_translate %}
     <input class="btn btn-default" type="submit" value="{% trans "Save" %}" name="save" tabindex="150" {% if locked %}disabled="disabled"{% endif %} />
-    {% endif %}
     {% elif not user.is_authenticated %}
     {% url 'login' as login_url %}
     {% with unit.translation.get_translate_url as translate_url %}
     {% blocktrans %}<a href="{{ login_url }}?next={{ translate_url }}">Log in</a> for saving translations.{% endblocktrans %}
     {% endwith %}
     {% endif %}
-    {% endif %}
 
-    {% if unit.translation.subproject.enable_suggestions %}
-    {% if perms.trans.add_suggestion %}
+    {% if user_can_suggest %}
     <input class="btn btn-default" type="submit" value="{% trans "Suggest" %}" name="suggest" tabindex="151" {% if project_locked %}disabled="disabled"{% endif %} />
     {% else %}
     {% trans "No privileges for adding suggestions!" %}
     {% endif %}
-    {% endif %}
 
-    {% if perms.trans.save_translation %}
-    {% if perms.trans.save_template or not object.is_template %}
+    {% if user_can_translate %}
     <div class="pull-right flip hidden-xs">
     {% trans "Commit message:" %} 
     <input type="text" name="commit_message" class="tooltip-control" 
@@ -112,7 +119,6 @@
         title="{% trans "You can leave this empty in most cases as Weblate generates basic commit messages automatically." %}"
     />
     </div>
-    {% endif %}
     {% endif %}
   </div>
 </div>
@@ -129,7 +135,7 @@
 {% if comments or perms.trans.add_comment %}
 <li><a href="#comments" data-toggle="tab">{% trans "Comments" %}{% if comments %} <span class="badge">{{ comments.count }}</span>{% endif %}</a></li>
 {% endif %}
-{% if mt_enabled and perms.trans.use_mt %}
+{% if user_can_use_mt %}
 <li><a href="#machine" data-toggle="tab" data-load="mt" title="{% trans "Machine translation suggestions" %}">{% trans "Machine translation" %}</a></li>
 {% endif %}
 <li><a href="#search" data-toggle="tab">{% trans "Search" %}</a></li>
@@ -178,26 +184,22 @@
 {% endif %}
 </strong></h5>
 {% format_translation suggestion.target unit.translation.language unit.target %}
-{% if unit.can_vote_suggestions %}
+{% if user_can_vote_suggestion %}
 <p class="help-block">
 {% blocktrans count count=suggestion.get_num_votes %}{{ count }} vote{% plural %}{{ count }} votes{% endblocktrans %}
 </p>
 {% endif %}
 <div class="pull-right flip">
-{% if unit.can_vote_suggestions and perms.trans.vote_suggestion %}
+{% if user_can_vote_suggestion %}
 <button type="submit" class="btn btn-success btn-xs" name="upvote" value="{{ suggestion.id }}"><i class="fa fa-thumbs-up"></i> {% trans "Vote for" %}</button>
 <button type="submit" class="btn btn-danger btn-xs" name="downvote" value="{{ suggestion.id }}"><i class="fa fa-thumbs-down"></i> {% trans "Vote against" %}</button>
 {% endif %}
-{% if not unit.only_vote_suggestions or perms.trans.override_suggestion %}
-{% if perms.trans.save_template or not object.is_template %}
-{% if perms.trans.accept_suggestion %}
+{% if user_can_accept_suggestion %}
 <button type="submit" class="btn btn-success btn-xs" name="accept" value="{{ suggestion.id }}"><i class="fa fa-check"></i> {% trans "Accept" %}</button>
 <button type="submit" class="btn btn-warning btn-xs" name="accept_edit" value="{{ suggestion.id }}"><i class="fa fa-pencil"></i> {% trans "Accept and edit" %}</button>
 {% endif %}
-{% if perms.trans.delete_suggestion %}
+{% if user_can_delete_suggestion %}
 <button type="submit" class="btn btn-danger btn-xs" name="delete" value="{{ suggestion.id }}"><i class="fa fa-trash"></i> {% trans "Delete" %}</button>
-{% endif %}
-{% endif %}
 {% endif %}
 </div>
 <div class="clearfix"></div>
@@ -224,10 +226,8 @@
     <td><a href="{{ item.get_absolute_url }}">{% format_translation item.target item.translation.language unit.target %}</a></td>
     <td>{% get_state_flags item %}</td>
     <td>
-    {% if perms.trans.save_translation %}
-    {% if perms.trans.save_template or not object.is_template %}
+    {% if user_can_translate %}
     <a class="mergebutton small-button btn btn-default" href="{{ unit.translation.get_translate_url}}?sid={{ search_id }}&amp;offset={{ offset }}&amp;checksum={{ unit.checksum }}&amp;merge={{ item.id }}" title="{% trans "Use this translation for all components" %}">{% trans "Use this translation" %}</a>
-    {% endif %}
     {% endif %}
     </td>
     </tr>
@@ -257,7 +257,7 @@
 <p>{% trans "Loading…" %}</p>
 </div>
 
-{% if mt_enabled and perms.trans.use_mt %}
+{% if user_can_use_mt %}
 <div class="tab-pane" id="machine">
 <div class="panel panel-primary">
 <div class="panel-heading">
@@ -337,7 +337,7 @@
   {% if others %}
   <div class="alert alert-warning check"><a href="#others" data-toggle="tab" class="alert-link">{% trans "Other translations" %}</a> <span class="badge pull-right flip">{{ others.count }}</span></div>
   {% endif %}
-  {% show_checks checks user %}
+  {% show_checks unit.translation.subproject.project checks user %}
   {% if comments %}
   <div class="alert alert-info check"><a href="#comments" data-toggle="tab" class="alert-link">{% trans "Comments" %}</a> <span class="badge pull-right flip">{{ comments.count }}</span></div>
   {% endif %}
@@ -364,10 +364,8 @@
         <td>{{ item.source }}</td>
         <td class="target">{% format_translation item.target unit.translation.language simple=True %}</td>
         <td>
-        {% if perms.trans.save_translation %}
-        {% if perms.trans.save_template or not object.is_template %}
+        {% if user_can_translate or user_can_suggest %}
         <a class="copydict btn btn-default btn-xs" title="{% trans "Copy word to translation" %}">{% trans "Copy" %}</a>
-        {% endif %}
         {% endif %}
         </td>
         </tr>
@@ -395,14 +393,14 @@
     <td>{% format_translation unit.context search_match=search_query simple=True %}</td>
     </tr>
     {% endif %}
-    {% if unit.flags or perms.trans.edit_flags %}
+    {% if unit.flags or user_can_edit_flags %}
     <tr>
     <th>{% trans "Flags" %}</th>
     </tr>
     <tr>
     <td>
     {{ unit.all_flags|join:", " }}
-    {% if perms.trans.edit_flags %} <a class="button smallbutton" href="{% url 'review_source' project=unit.translation.subproject.project.slug subproject=unit.translation.subproject.slug  %}?checksum={{ unit.checksum }}"><i class="fa fa-pencil"></i></a>{% endif %}
+    {% if user_can_edit_flags %} <a class="button smallbutton" href="{% url 'review_source' project=unit.translation.subproject.project.slug subproject=unit.translation.subproject.slug  %}?checksum={{ unit.checksum }}"><i class="fa fa-pencil"></i></a>{% endif %}
     </td>
     </tr>
     {% endif %}
@@ -413,7 +411,7 @@
     <tr>
     <td>
     {{ unit.source_info.get_priority_display }}
-    {% if perms.trans.edit_priority %} <a class="button smallbutton" href="{% url 'review_source' project=unit.translation.subproject.project.slug subproject=unit.translation.subproject.slug  %}?checksum={{ unit.checksum }}"><i class="fa fa-pencil"></i></a>{% endif %}
+    {% if user_can_edit_priority %} <a class="button smallbutton" href="{% url 'review_source' project=unit.translation.subproject.project.slug subproject=unit.translation.subproject.slug  %}?checksum={{ unit.checksum }}"><i class="fa fa-pencil"></i></a>{% endif %}
     </td>
     </tr>
     {% with unit.active_source_checks as checks %}
@@ -422,7 +420,7 @@
     <th>{% trans "Failing checks" %}</th>
     </tr>
     <tr>
-    <td>{% show_checks checks user %}</td>
+    <td>{% show_checks unit.translation.subproject.project checks user %}</td>
     </tr>
     {% endif %}
     {% endwith %}

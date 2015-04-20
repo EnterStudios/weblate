@@ -25,6 +25,7 @@ from django.http import HttpResponseRedirect, HttpResponse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.utils import formats
+from django.core.exceptions import PermissionDenied
 import uuid
 import time
 
@@ -41,6 +42,10 @@ from weblate.trans.forms import (
 from weblate.trans.views.helper import get_translation
 from weblate.trans.checks import CHECKS
 from weblate.trans.util import join_plural
+from weblate.trans.permissions import (
+    can_translate, can_suggest, can_accept_suggestion, can_delete_suggestion,
+    can_vote_suggestion, can_delete_comment,
+)
 
 
 def cleanup_session(session):
@@ -95,18 +100,25 @@ def search(translation, request):
     review_form = ReviewForm(request.GET)
 
     search_query = None
-    if review_form.is_valid():
-        # Review
-        allunits = translation.unit_set.review(
-            review_form.cleaned_data['date'],
-            request.user
-        )
+    if 'date' in request.GET:
+        if review_form.is_valid():
+            # Review
+            allunits = translation.unit_set.review(
+                review_form.cleaned_data['date'],
+                request.user
+            )
 
-        formatted_date = formats.date_format(
-            review_form.cleaned_data['date'],
-            'SHORT_DATE_FORMAT'
-        )
-        name = _('Review of translations since %s') % formatted_date
+            formatted_date = formats.date_format(
+                review_form.cleaned_data['date'],
+                'SHORT_DATE_FORMAT'
+            )
+            name = _('Review of translations since %s') % formatted_date
+        else:
+            show_form_errors(request, review_form)
+
+            # Filtering by type
+            allunits = translation.unit_set.all()
+            name = _('All strings')
     elif search_form.is_valid():
         # Apply search conditions
         allunits = translation.unit_set.search(
@@ -118,10 +130,7 @@ def search(translation, request):
         name = search_form.get_name()
     else:
         # Error reporting
-        if 'date' in request.GET:
-            show_form_errors(request, review_form)
-        elif 'q' in request.GET or 'type' in request.GET:
-            show_form_errors(request, search_form)
+        show_form_errors(request, search_form)
 
         # Filtering by type
         allunits = translation.unit_set.all()
@@ -175,19 +184,11 @@ def perform_suggestion(unit, form, request):
         messages.error(request, _('Your suggestion is empty!'))
         # Stay on same entry
         return False
-    elif not request.user.has_perm('trans.add_suggestion'):
+    elif not can_suggest(request.user, unit.translation):
         # Need privilege to add
         messages.error(
             request,
             _('You don\'t have privileges to add suggestions!')
-        )
-        # Stay on same entry
-        return False
-    elif not unit.translation.subproject.enable_suggestions:
-        # Need privilege to add
-        messages.error(
-            request,
-            _('Suggestions are not allowed on this translation!')
         )
         # Stay on same entry
         return False
@@ -290,24 +291,10 @@ def handle_translate(translation, request, user_locked,
 
     if 'suggest' in request.POST:
         go_next = perform_suggestion(unit, form, request)
-    elif (translation.is_template() and not
-          request.user.has_perm('trans.save_template')):
-        # Need privilege to save
-        messages.error(
-            request,
-            _('You don\'t have privileges to save templates!')
-        )
-    elif not request.user.has_perm('trans.save_translation'):
-        # Need privilege to save
+    elif not can_translate(request.user, unit.translation):
         messages.error(
             request,
             _('You don\'t have privileges to save translations!')
-        )
-    elif (unit.only_vote_suggestions() and not
-          request.user.has_perm('trans.override_suggestion')):
-        messages.error(
-            request,
-            _('Only suggestions are allowed in this translation!')
         )
     elif not user_locked:
         # Custom commit message
@@ -332,17 +319,7 @@ def handle_merge(translation, request, next_unit_url):
     '''
     Handles unit merging.
     '''
-    if (translation.is_template() and not
-            request.user.has_perm('trans.save_template')):
-        # Need privilege to save
-        messages.error(
-            request,
-            _('You don\'t have privileges to save templates!')
-        )
-        return
-
-    if not request.user.has_perm('trans.save_translation'):
-        # Need privilege to save
+    if not can_translate(request.user, translation):
         messages.error(
             request,
             _('You don\'t have privileges to save translations!')
@@ -382,17 +359,7 @@ def handle_merge(translation, request, next_unit_url):
 
 
 def handle_revert(translation, request, next_unit_url):
-    if (translation.is_template() and not
-            request.user.has_perm('trans.save_template')):
-        # Need privilege to save
-        messages.error(
-            request,
-            _('You don\'t have privileges to save templates!')
-        )
-        return
-
-    if not request.user.has_perm('trans.save_translation'):
-        # Need privilege to save
+    if not can_translate(request.user, translation):
         messages.error(
             request,
             _('You don\'t have privileges to save translations!')
@@ -431,30 +398,22 @@ def check_suggestion_permissions(request, mode, translation):
     """
     Checks permission for suggestion handling.
     """
-    if (translation.is_template() and not
-            request.user.has_perm('trans.save_template')):
-        # Need privilege to save
-        messages.error(
-            request,
-            _('You don\'t have privileges to save templates!')
-        )
-        return False
     if mode in ('accept', 'accept_edit'):
-        if not request.user.has_perm('trans.accept_suggestion'):
+        if not can_accept_suggestion(request.user, translation):
             messages.error(
                 request,
                 _('You do not have privilege to accept suggestions!')
             )
             return False
     elif mode == 'delete':
-        if not request.user.has_perm('trans.delete_suggestion'):
+        if not can_delete_suggestion(request.user, translation):
             messages.error(
                 request,
                 _('You do not have privilege to delete suggestions!')
             )
             return False
     elif mode in ('upvode', 'downvote'):
-        if not request.user.has_perm('trans.vote_suggestion'):
+        if not can_vote_suggestion(request.user, translation):
             messages.error(
                 request,
                 _('You do not have privilege to vote for suggestions!')
@@ -512,7 +471,7 @@ def translate(request, project, subproject, lang):
     translation = get_translation(request, project, subproject, lang)
 
     # Check locks
-    user_locked = translation.is_user_locked(request)
+    user_locked = translation.is_user_locked(request.user)
     project_locked = translation.subproject.locked
     own_lock = translation.lock_user == request.user
     locked = project_locked or user_locked
@@ -639,6 +598,7 @@ def translate(request, project, subproject, lang):
     )
 
 
+@login_required
 @permission_required('trans.automatic_translation')
 def auto_translation(request, project, subproject, lang):
     translation = get_translation(request, project, subproject, lang)
@@ -737,6 +697,9 @@ def delete_comment(request, pk):
     """
     comment_obj = get_object_or_404(Comment, pk=pk)
     comment_obj.project.check_acl(request)
+
+    if not can_delete_comment(request.user, comment_obj.project):
+        raise PermissionDenied()
 
     units = get_related_units(comment_obj)
     if units.exists():
@@ -842,13 +805,20 @@ def load_zen(request, project, subproject, lang):
     )
 
 
+@login_required
+@require_POST
 def save_zen(request, project, subproject, lang):
     '''
     Save handler for zen mode.
     '''
     translation = get_translation(request, project, subproject, lang)
     form = TranslationForm(translation, None, request.POST)
-    if not form.is_valid():
+    if not can_translate(request.user, translation):
+        messages.error(
+            request,
+            _('You don\'t have privileges to save translations!')
+        )
+    elif not form.is_valid():
         messages.error(request, _('Failed to save translation!'))
     else:
         unit = form.cleaned_data['unit']

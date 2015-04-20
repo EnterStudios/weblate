@@ -261,10 +261,11 @@ def show_message(tags, message):
 
 
 @register.inclusion_tag('list-checks.html')
-def show_checks(checks, user):
+def show_checks(project, checks, user):
     return {
         'checks': checks,
-        'perms_ignore_check': user.has_perm('trans.ignore_check'),
+        'user': user,
+        'project': project,
     }
 
 
